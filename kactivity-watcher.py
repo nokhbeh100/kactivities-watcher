@@ -7,16 +7,24 @@ from datetime import datetime, timedelta, timezone
 from aw_core.models import Event
 from aw_client import ActivityWatchClient
 
+import os
+
+kactivityCommand = "kactivities-cli --current-activity"
+def getCurrentKdeActivity():
+	currentActivity = os.popen(kactivityCommand).read()
+	status, actid, name, _ = currentActivity.split()
+	print( name )
+	return name
 
 # We'll run with testing=True so we don't mess up any production instance.
 # Make sure you've started aw-server with the `--testing` flag as well.
-client = ActivityWatchClient("test-client", testing=True)
+client = ActivityWatchClient("kactivities-client")
 
 # Make the bucket_id unique for both the client and host
 # The convention is to use client-name_hostname as bucket name,
 # but if you have multiple buckets in one client you can add a
 # suffix such as client-name-event-type or similar
-bucket_id = "{}_{}".format("test-client-bucket", client.client_hostname)
+bucket_id = "{}_{}".format("kactivities-client-bucket", client.client_hostname)
 # A short and descriptive event type name
 # Will be used by visualizers (such as aw-webui) to detect what type and format the events are in
 # Can for example be "currentwindow", "afkstatus", "ping" or "currentsong"
@@ -32,13 +40,15 @@ client.create_bucket(bucket_id, event_type="test")
 # Asynchronous loop example
 # This context manager starts the queue dispatcher thread and stops it when done, always use it when setting queued=True.
 # Alternatively you can use client.connect() and client.disconnect() instead if you prefer that
+lastActName = ''
 with client:
 	# Now we can send some events via heartbeats
 	# This will send one heartbeat every second 5 times
 	sleeptime = 1
-	for i in range(5):
+	for i in range(3):
 		# Create a sample event to send as heartbeat
-		heartbeat_data = {"label": "heartbeat"}
+		actName = getCurrentKdeActivity()
+		heartbeat_data = {"label": actName}
 		now = datetime.now(timezone.utc)
 		heartbeat_event = Event(timestamp=now, data=heartbeat_data)
 
@@ -47,34 +57,19 @@ with client:
 		# TODO: Make a section with an illustration on how heartbeats work and insert a link here
 		print("Sending heartbeat {}".format(i))
 		client.heartbeat(bucket_id, heartbeat_event, pulsetime=sleeptime+1, queued=True, commit_interval=4.0)
-
 		# Sleep a second until next heartbeat
 		sleep(sleeptime)
 
-	# Give the dispatcher thread some time to complete sending the last events.
-	# If we don't do this the events might possibly queue up and be sent the
-	# next time the client starts instead.
+		# Give the dispatcher thread some time to complete sending the last events.
+		# If we don't do this the events might possibly queue up and be sent the
+		# next time the client starts instead.
 	sleep(1)
 
-# Synchronous example, insert an event
-event_data = {"label": "non-heartbeat event"}
-now = datetime.now(timezone.utc)
-event = Event(timestamp=now, data=event_data)
-inserted_event = client.insert_event(bucket_id, event)
 
-# The event returned from insert_event has been assigned an id by aw-server
-assert inserted_event.id is not None
-
-# Fetch last 10 events from bucket
-# Should be two events in order of newest to oldest
-# - "shutdown" event with a duration of 0
-# - "heartbeat" event with a duration of 5*sleeptime
-events = client.get_events(bucket_id=bucket_id, limit=10)
-print(events)
 
 # Now lets clean up after us.
 # You probably don't want this in your watchers though!
-client.delete_bucket(bucket_id)
+#client.delete_bucket(bucket_id)
 
 # If something doesn't work, run aw-server with --verbose to see why some request doesn't go through
 # Good luck with writing your own watchers :-)
