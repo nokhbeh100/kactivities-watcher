@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 
 from time import sleep
@@ -40,15 +39,13 @@ client.create_bucket(bucket_id, event_type="test")
 # Asynchronous loop example
 # This context manager starts the queue dispatcher thread and stops it when done, always use it when setting queued=True.
 # Alternatively you can use client.connect() and client.disconnect() instead if you prefer that
-lastActName = ''
 with client:
 	# Now we can send some events via heartbeats
 	# This will send one heartbeat every second 5 times
 	sleeptime = 1
-	for i in range(3):
+	for i in range(5000):
 		# Create a sample event to send as heartbeat
-		actName = getCurrentKdeActivity()
-		heartbeat_data = {"label": actName}
+		heartbeat_data = {"Title": getCurrentKdeActivity()}
 		now = datetime.now(timezone.utc)
 		heartbeat_event = Event(timestamp=now, data=heartbeat_data)
 
@@ -57,15 +54,30 @@ with client:
 		# TODO: Make a section with an illustration on how heartbeats work and insert a link here
 		print("Sending heartbeat {}".format(i))
 		client.heartbeat(bucket_id, heartbeat_event, pulsetime=sleeptime+1, queued=True, commit_interval=4.0)
+
 		# Sleep a second until next heartbeat
 		sleep(sleeptime)
 
-		# Give the dispatcher thread some time to complete sending the last events.
-		# If we don't do this the events might possibly queue up and be sent the
-		# next time the client starts instead.
+	# Give the dispatcher thread some time to complete sending the last events.
+	# If we don't do this the events might possibly queue up and be sent the
+	# next time the client starts instead.
 	sleep(1)
 
+# Synchronous example, insert an event
+event_data = {"label": "non-heartbeat event"}
+now = datetime.now(timezone.utc)
+event = Event(timestamp=now, data=event_data)
+inserted_event = client.insert_event(bucket_id, event)
 
+# The event returned from insert_event has been assigned an id by aw-server
+#assert inserted_event.id is not None
+
+# Fetch last 10 events from bucket
+# Should be two events in order of newest to oldest
+# - "shutdown" event with a duration of 0
+# - "heartbeat" event with a duration of 5*sleeptime
+events = client.get_events(bucket_id=bucket_id, limit=10)
+print(events)
 
 # Now lets clean up after us.
 # You probably don't want this in your watchers though!
