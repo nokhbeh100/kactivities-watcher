@@ -11,7 +11,7 @@ import os
 kactivityCommand = "kactivities-cli --current-activity"
 def getCurrentKdeActivity():
 	currentActivity = os.popen(kactivityCommand).read()
-	status, actid, name, _ = currentActivity.split()
+	name = ' '.join(currentActivity.split()[2:-1])
 	#print( name )
 	return name
 
